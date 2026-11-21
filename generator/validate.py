@@ -1,0 +1,194 @@
+# -*- coding: utf-8 -*-
+"""
+کنترل کیفیت پروپوزال آرون — چک‌لیست خودکار پیش از تحویل.
+
+استفاده:
+    python3 generator/validate.py templates/Aron-Proposal-Template.docx
+    python3 generator/validate.py Aron-DotOne-Proposal-final.docx
+
+خروجی: PASS / WARN / FAIL برای هر قاعده + کد خروج ۱ در صورت وجود FAIL.
+"""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+from docx import Document
+from docx.oxml.ns import qn
+
+FIXED_TITLES = [
+    "پیشنهاد هم‌مسیری و ساخت اعتبار پایدار",
+    "مروری کلان",
+    "۱. بررسی وضعیت فعلی: دریچه‌های ساخت اعتبار",
+    "۲. راه‌حل چیست؟",
+    "۱. شناخت مخاطبان و سنجش اعتبار",
+    "۲. روایت مشترک و بانک اطلاعات برند",
+    "۳. بررسی دقیق پیش از اطلاع‌رسانی",
+    "۴. مدیریت رسانه و موقعیت‌های حساس",
+    "۵. راهبری برند شخصی",
+    "۶. توسعه روابط و کانال‌های ارتباطی",
+    "الگوهای جهانی",
+    "هارمونی پیشنهادی آرون",
+    "۳. مدل پیشنهادی همکاری و نحوه همراهی",
+    "گام بعدی",
+]
+
+FORBIDDEN = [
+    "کمپین", "وایرال", "ترند", "تضمین", "رتبهٔ یک", "رتبه یک",
+    "انقلابی", "بی‌نظیر", "جهش", "حذف رقیب", "۲۴/۷",
+    "هزینه", "ریال", "تومان کارکرد", "نفر-ماه", "SLA",
+]
+
+TYPOS = {
+    "یکپارچه سازی": "یکپارچه‌سازی",
+    "تامین ": "تأمین ",
+    "برعهده": "بر عهده",
+    "دات وان": "دات‌وان",
+}
+
+LATIN_DIGITS = re.compile(r"(?<![\w.])[0-9]+(?![\w.])")
+
+
+def words(t):
+    return len(t.split())
+
+
+def main(path):
+    doc = Document(path)
+    paras = [p for p in doc.paragraphs]
+    texts = [p.text.strip() for p in paras if p.text.strip()]
+    joined = "\n".join(texts)
+    fails, warns, oks = [], [], []
+
+    def fail(m):
+        fails.append(m)
+
+    def warn(m):
+        warns.append(m)
+
+    def ok(m):
+        oks.append(m)
+
+    # ۱ — تیترهای ثابت
+    for title in FIXED_TITLES:
+        if any(t.startswith(title) for t in texts):
+            ok(f"تیتر ثابت موجود: {title}")
+        else:
+            fail(f"تیتر ثابت غایب: {title}")
+
+    # ۲ — حجم
+    total = sum(words(t) for t in texts)
+    if 900 <= total <= 1800:
+        ok(f"حجم متن: {total} کلمه (بازهٔ ۹۰۰–۱۸۰۰)")
+    else:
+        warn(f"حجم متن خارج از بازه: {total} کلمه")
+
+    # ۳ — واژگان ممنوع
+    for w in FORBIDDEN:
+        if w in joined:
+            fail(f"واژهٔ ممنوع: «{w}»")
+
+    # ۴ — خطاهای املا/فاصله
+    for bad, good in TYPOS.items():
+        if bad in joined:
+            warn(f"اصلاح لازم: «{bad.strip()}» → «{good.strip()}»")
+    if "  " in joined:
+        warn("فاصلهٔ تکراری در متن")
+    if re.search(r"[\u0600-\u06FF]\(", joined):
+        warn("پرانتز چسبیده به واژهٔ فارسی (فاصلهٔ پیش از ارجاع)")
+    if re.search(r"[،؛.:!؟]\s*[،؛.:!؟]", joined):
+        warn("نشانه‌گذاری تکراری")
+
+    # ۵ — ساختار
+    axis_titles = [t for t in texts if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t)]
+    if len(axis_titles) >= 4:
+        ok(f"تعداد محورها: {len(axis_titles)}")
+    else:
+        fail(f"تعداد محورها کم است: {len(axis_titles)}")
+    if len({t[0] for t in axis_titles}) != len(axis_titles):
+        warn("برچسب تکراری در محورها (الف/ب/ج/…)")
+
+    # ۶ — طول محورها و لایه‌ها
+    for t in texts:
+        if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t):
+            i = texts.index(t)
+            if i + 1 < len(texts):
+                n = words(texts[i + 1])
+                if not 35 <= n <= 80:
+                    warn(f"طول نامتعارف محور ({n} کلمه): {t[:40]}")
+    for t in texts:
+        if re.match(r"^[۱-۶]\. (?!بررسی|راه|مدل)", t):
+            i = texts.index(t)
+            if i + 1 < len(texts):
+                n = words(texts[i + 1])
+                if not 15 <= n <= 40:
+                    warn(f"طول نامتعارف لایه ({n} کلمه): {t[:40]}")
+
+    # ۷ — پرونوم و لحن
+    ma = len(re.findall(r"(?<![\u0600-\u06FF])ما(?![\u0600-\u06FF])", joined))
+    if ma <= 6:
+        ok(f"کاربرد «ما»: {ma} بار")
+    else:
+        warn(f"کاربرد زیاد «ما»: {ma} بار (حداکثر ۶)")
+
+    # ۸ — RTL و فونت
+    non_rtl = [
+        p.text[:40] for p in paras
+        if p.text.strip() and p._p.find(qn("w:pPr")) is not None
+        and p._p.pPr.find(qn("w:bidi")) is None
+    ]
+    if non_rtl:
+        warn(f"{len(non_rtl)} پاراگراف بدون راست‌به‌چپ: {non_rtl[:3]}")
+    else:
+        ok("همهٔ پاراگراف‌ها راست‌به‌چپ")
+
+    sizes = set()
+    fonts = set()
+    for p in paras:
+        for r in p.runs:
+            if not r.text.strip():
+                continue
+            if r.font.size:
+                sizes.add(round(r.font.size.pt, 1))
+            if r.font.name:
+                fonts.add(r.font.name)
+    allowed = {12.0, 14.0, 11.0, 10.5, 1.0}
+    if sizes - allowed:
+        warn(f"اندازه‌های غیرمجاز: {sorted(sizes - allowed)}")
+    else:
+        ok(f"اندازه‌های فونت مجاز: {sorted(sizes)}")
+
+    # ۹ — خط لاتین/اعداد
+    latin = []
+    for m in LATIN_DIGITS.finditer(joined):
+        ctx = joined[max(0, m.start() - 45):m.end() + 1]
+        # سالِ داخل ارجاع لاتین مجاز است: (Musk, 2016)
+        if re.search(r"[A-Za-z][^()]{0,40}, ?[0-9]{4}\)?$", ctx):
+            continue
+        latin.append(m.group(0))
+    if latin:
+        warn(f"عدد لاتین در متن فارسی: {latin[:6]}")
+    else:
+        ok("همهٔ اعداد فارسی‌اند")
+
+    # ۱۰ — قیمت و تعهد
+    if re.search(r"(قیمت|تعرفه|هزینهٔ خدمات|مبلغ قرارداد)", joined):
+        fail("اشاره به قیمت/تعرفه — این سند نباید قیمت داشته باشد")
+    if re.search(r"(ماه|هفته)\s*(اول|دوم|سوم)\b", joined):
+        warn("زمان‌بندی اجرایی در سند دیده می‌شود")
+
+    # گزارش
+    for m in oks:
+        print(f"  PASS  {m}")
+    for m in warns:
+        print(f"  WARN  {m}")
+    for m in fails:
+        print(f"  FAIL  {m}")
+    print(f"\nنتیجه: {len(oks)} قبول، {len(warns)} هشدار، {len(fails)} خطا")
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    target = sys.argv[1] if len(sys.argv) > 1 else "templates/Aron-Proposal-Template.docx"
+    sys.exit(main(target))
