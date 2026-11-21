@@ -22,17 +22,17 @@ FIXED_TITLES = [
     "مروری کلان",
     "۱. بررسی وضعیت فعلی: دریچه‌های ساخت اعتبار",
     "۲. راه‌حل چیست؟",
-    "۱. شناخت مخاطبان و سنجش اعتبار",
-    "۲. روایت مشترک و بانک اطلاعات برند",
-    "۳. بررسی دقیق پیش از اطلاع‌رسانی",
-    "۴. مدیریت رسانه و موقعیت‌های حساس",
-    "۵. راهبری برند شخصی",
-    "۶. توسعه روابط و کانال‌های ارتباطی",
     "الگوهای جهانی",
     "هارمونی پیشنهادی آرون",
     "۳. مدل پیشنهادی همکاری و نحوه همراهی",
     "گام بعدی",
 ]
+
+# محورها و لایه‌ها اختصاصی هر شرکت‌اند: تیتر و تعدادشان از شکاف واقعی
+# همان شرکت می‌آید و هرگز از قالب شرکت دیگر کپی نمی‌شود.
+AXIS_LABELS = "الفبجدهوزحطیکلمنسعفصقرشتثخ ذضظغ".replace(" ", "")
+AXIS_RE = re.compile(r"^(الف|[" + AXIS_LABELS + r"])\. ")
+LAYER_RE = re.compile(r"^[۱-۹]\. (?!بررسی|راه|مدل)")
 
 FORBIDDEN = [
     "کمپین", "وایرال", "ترند", "تضمین", "رتبهٔ یک", "رتبه یک",
@@ -112,30 +112,41 @@ def main(path, forbid=()):
     if re.search(r"[،؛.:!؟]\s*[،؛.:!؟]", joined):
         warn("نشانه‌گذاری تکراری")
 
-    # ۶ — ساختار
-    axis_titles = [t for t in texts if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t)]
+    # ۶ — ساختار (تعداد و تیتر محورها/لایه‌ها آزاد و اختصاصی‌اند)
+    axis_titles = [t for t in texts if AXIS_RE.match(t)]
     if len(axis_titles) >= 4:
-        ok(f"تعداد محورها: {len(axis_titles)}")
+        ok(f"تعداد محورها: {len(axis_titles)} (اختصاصی شرکت)")
     else:
         fail(f"تعداد محورها کم است: {len(axis_titles)}")
     if len({t[0] for t in axis_titles}) != len(axis_titles):
         warn("برچسب تکراری در محورها (الف/ب/ج/…)")
+    layer_titles = [t for t in texts if LAYER_RE.match(t)]
+    if len(layer_titles) >= 4:
+        ok(f"تعداد لایه‌ها: {len(layer_titles)} (اختصاصی شرکت)")
+    else:
+        fail(f"تعداد لایه‌ها کم است: {len(layer_titles)}")
 
     # ۷ — طول محورها و لایه‌ها
     for t in texts:
-        if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t):
+        if AXIS_RE.match(t):
             i = texts.index(t)
             if i + 1 < len(texts):
                 n = words(texts[i + 1])
                 if not 35 <= n <= 80:
                     warn(f"طول نامتعارف محور ({n} کلمه): {t[:40]}")
     for t in texts:
-        if re.match(r"^[۱-۶]\. (?!بررسی|راه|مدل)", t):
+        if LAYER_RE.match(t):
             i = texts.index(t)
             if i + 1 < len(texts):
                 n = words(texts[i + 1])
                 if not 15 <= n <= 40:
                     warn(f"طول نامتعارف لایه ({n} کلمه): {t[:40]}")
+
+    # ۷ب — علامت ممنوعهٔ ٔ (U+0654) هرگز در متن نمی‌آید
+    if "\u0654" in joined:
+        fail("علامت ممنوعهٔ ٔ (U+0654) در متن هست")
+    else:
+        ok("علامت ممنوعهٔ ٔ در متن نیست")
 
     # ۸ — پرونوم و لحن
     ma = len(re.findall(r"(?<![\u0600-\u06FF])ما(?![\u0600-\u06FF])", joined))
