@@ -11,6 +11,7 @@
 | `generator/data/dotone.json` | محتوای سند مرجع به‌صورت داده (بازتولید ۱۰۰٪ عیناً متن) |
 | `generator/data/template.json` | دادهٔ قالب با راهنمای هر پاراگراف |
 | `generator/validate.py` | کنترل کیفیت خودکار پیش از تحویل |
+| `research/_TEMPLATE.md` | فرم دریافت دادهٔ هر شرکت جدید |
 
 ## ساخت سند جدید
 
