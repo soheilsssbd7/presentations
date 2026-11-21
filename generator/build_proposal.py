@@ -181,6 +181,75 @@ def add_band(doc, lines, *, fill, color=INK, bold_first=False, border=False, siz
     return table
 
 
+
+def add_bullets(container, items, *, indent=0.28, color=INK, size=12):
+    """فهرست بولت‌دار با تورفتگی معلق (RTL)."""
+    for text in items:
+        p = container.add_paragraph(text, style="List Bullet")
+        _rtl_para(p)
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.25
+        p.paragraph_format.left_indent = Inches(indent)
+        p.paragraph_format.first_line_indent = Inches(-indent)
+        for r in p.runs:
+            _set_run(r, size=size, color=color)
+
+
+def _field(p, instr, *, size=9, color=SLATE):
+    fld = OxmlElement("w:fldSimple")
+    fld.set(qn("w:instr"), instr)
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    rfonts = OxmlElement("w:rFonts")
+    rfonts.set(qn("w:ascii"), BODY_FONT)
+    rfonts.set(qn("w:hAnsi"), BODY_FONT)
+    rfonts.set(qn("w:cs"), CS_FONT)
+    rpr.append(rfonts)
+    color_el = OxmlElement("w:color")
+    color_el.set(qn("w:val"), str(color))
+    rpr.append(color_el)
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), str(int(size * 2)))
+    rpr.append(sz)
+    szcs = OxmlElement("w:szCs")
+    szcs.set(qn("w:val"), str(int(size * 2)))
+    rpr.append(szcs)
+    rpr.append(OxmlElement("w:rtl"))
+    run.append(rpr)
+    fld.append(run)
+    p._p.append(fld)
+
+
+def add_page_numbers(doc):
+    """پانویس: صفحهٔ X از Y — راست‌به‌چپ."""
+    section = doc.sections[0]
+    footer = section.footer
+    p = footer.paragraphs[0]
+    _rtl_para(p)
+    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    r = p.add_run("صفحهٔ ")
+    _set_run(r, size=9, color=SLATE)
+    _field(p, "PAGE")
+    r = p.add_run(" از ")
+    _set_run(r, size=9, color=SLATE)
+    _field(p, "NUMPAGES")
+
+
+def add_block(container, block):
+    """زیربخش اختیاری: تیتر + پاراگراف‌ها + بولت‌ها."""
+    add_par(
+        container, block["heading"], font=TITLE_FONT, size=12, bold=True,
+        color=NAVY, before=12, after=4, line=None, keep_next=True,
+    )
+    for text in block.get("paras", []):
+        add_par(container, text, after=4, line=None)
+    if block.get("bullets"):
+        add_bullets(container, block["bullets"])
+
 def spacer(doc, pts=6):
     p = doc.add_paragraph()
     _rtl_para(p)
@@ -241,17 +310,7 @@ def build(data: dict, out_path: str | Path) -> Path:
     for text in ov["paras"]:
         add_par(doc, text)
     if ov.get("bullets"):
-        for text in ov["bullets"]:
-            p = doc.add_paragraph(text, style="List Bullet")
-            _rtl_para(p)
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.space_before = Pt(0)
-            p.paragraph_format.space_after = Pt(6)
-            p.paragraph_format.line_spacing = 1.25
-            p.paragraph_format.left_indent = Inches(0.25)
-            p.paragraph_format.first_line_indent = Inches(-0.25)
-            for r in p.runs:
-                _set_run(r, size=12, color=INK)
+        add_bullets(doc, ov["bullets"], indent=0.25)
     if ov.get("closing"):
         add_par(doc, ov["closing"])
 
@@ -265,6 +324,10 @@ def build(data: dict, out_path: str | Path) -> Path:
         add_par(doc, axis["title"], size=12, color=SLATE, before=12, after=4,
                 line=None, keep_next=True)
         add_par(doc, axis["body"], after=3)
+        if axis.get("bullets"):
+            add_bullets(doc, axis["bullets"])
+    for block in s1.get("extra", []):
+        add_block(doc, block)
     for text in s1.get("outro", []):
         add_par(doc, text, before=10, after=6, line=None)
 
@@ -277,11 +340,18 @@ def build(data: dict, out_path: str | Path) -> Path:
         add_par(doc, layer["title"], font=TITLE_FONT, size=12, bold=True, color=NAVY,
                 before=10, after=2, line=None, keep_next=True)
         add_par(doc, layer["body"], after=4, line=None)
+        if layer.get("bullets"):
+            add_bullets(doc, layer["bullets"])
     add_par(doc, s2["models_heading"], font=TITLE_FONT, size=12, bold=True, color=NAVY,
             before=12, after=4, line=None, keep_next=True)
     add_par(doc, s2["models_intro"], after=4, line=None)
     for model in s2["models"]:
-        add_par(doc, model["body"], after=3, line=None)
+        p = add_par(doc, model["body"], after=2, line=None)
+        if model.get("lesson"):
+            add_par(doc, "درس این الگو: " + model["lesson"], size=12, color=SLATE,
+                    after=4, line=None)
+    for block in s2.get("extra", []):
+        add_block(doc, block)
     add_par(doc, s2["harmony_heading"], font=TITLE_FONT, size=12, bold=True, color=NAVY,
             before=12, after=4, line=None, keep_next=True)
     add_par(doc, s2["harmony"], after=6, line=None)
@@ -298,6 +368,9 @@ def build(data: dict, out_path: str | Path) -> Path:
     # --- نوار پایانی ---
     spacer(doc, 8)
     add_band(doc, meta["closing_band"], fill=BAND_DARK, color=WHITE, bold_first=True)
+
+    if meta.get("page_numbers"):
+        add_page_numbers(doc)
 
     # فراداده
     props = doc.core_properties

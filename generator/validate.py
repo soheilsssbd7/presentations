@@ -54,7 +54,7 @@ def words(t):
     return len(t.split())
 
 
-def main(path):
+def main(path, forbid=()):
     doc = Document(path)
     paras = [p for p in doc.paragraphs]
     texts = [p.text.strip() for p in paras if p.text.strip()]
@@ -84,12 +84,24 @@ def main(path):
     else:
         warn(f"حجم متن خارج از بازه: {total} کلمه")
 
-    # ۳ — واژگان ممنوع
+    # ۳ — واژه‌های ممنوع + نشت نام کارفرمایان دیگر
+    if forbid:
+        hits = [w for w in forbid if w and w in joined]
+        if hits:
+            fail("نام/واژهٔ متعلق به پروندهٔ دیگر در سند: " + "، ".join(hits))
+        else:
+            ok(f"هیچ‌یک از {len(forbid)} واژهٔ ممنوع پرونده‌های دیگر در سند نیست")
+
+    for phrase in ("در مقایسه با", "برخلاف", "مشابه ", "همانند "):
+        if phrase in joined:
+            warn(f"عبارت مقایسه‌ای: «{phrase.strip()}» — سند باید مستقل و بدون ارجاع به پروندهٔ دیگر باشد")
+
+    # ۴ — واژگان ممنوع
     for w in FORBIDDEN:
         if w in joined:
             fail(f"واژهٔ ممنوع: «{w}»")
 
-    # ۴ — خطاهای املا/فاصله
+    # ۵ — خطاهای املا/فاصله
     for bad, good in TYPOS.items():
         if bad in joined:
             warn(f"اصلاح لازم: «{bad.strip()}» → «{good.strip()}»")
@@ -100,7 +112,7 @@ def main(path):
     if re.search(r"[،؛.:!؟]\s*[،؛.:!؟]", joined):
         warn("نشانه‌گذاری تکراری")
 
-    # ۵ — ساختار
+    # ۶ — ساختار
     axis_titles = [t for t in texts if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t)]
     if len(axis_titles) >= 4:
         ok(f"تعداد محورها: {len(axis_titles)}")
@@ -109,7 +121,7 @@ def main(path):
     if len({t[0] for t in axis_titles}) != len(axis_titles):
         warn("برچسب تکراری در محورها (الف/ب/ج/…)")
 
-    # ۶ — طول محورها و لایه‌ها
+    # ۷ — طول محورها و لایه‌ها
     for t in texts:
         if re.match(r"^(الف|ب|ج|د|ه|و)\. ", t):
             i = texts.index(t)
@@ -125,14 +137,14 @@ def main(path):
                 if not 15 <= n <= 40:
                     warn(f"طول نامتعارف لایه ({n} کلمه): {t[:40]}")
 
-    # ۷ — پرونوم و لحن
+    # ۸ — پرونوم و لحن
     ma = len(re.findall(r"(?<![\u0600-\u06FF])ما(?![\u0600-\u06FF])", joined))
     if ma <= 6:
         ok(f"کاربرد «ما»: {ma} بار")
     else:
         warn(f"کاربرد زیاد «ما»: {ma} بار (حداکثر ۶)")
 
-    # ۸ — RTL و فونت
+    # ۹ — RTL و فونت
     non_rtl = [
         p.text[:40] for p in paras
         if p.text.strip() and p._p.find(qn("w:pPr")) is not None
@@ -159,7 +171,7 @@ def main(path):
     else:
         ok(f"اندازه‌های فونت مجاز: {sorted(sizes)}")
 
-    # ۹ — خط لاتین/اعداد
+    # ۱۰ — خط لاتین/اعداد
     latin = []
     for m in LATIN_DIGITS.finditer(joined):
         ctx = joined[max(0, m.start() - 45):m.end() + 1]
@@ -172,7 +184,7 @@ def main(path):
     else:
         ok("همهٔ اعداد فارسی‌اند")
 
-    # ۱۰ — قیمت و تعهد
+    # ۱۱ — قیمت و تعهد
     if re.search(r"(قیمت|تعرفه|هزینهٔ خدمات|مبلغ قرارداد)", joined):
         fail("اشاره به قیمت/تعرفه — این سند نباید قیمت داشته باشد")
     if re.search(r"(ماه|هفته)\s*(اول|دوم|سوم)\b", joined):
@@ -190,5 +202,10 @@ def main(path):
 
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "templates/Aron-Proposal-Template.docx"
-    sys.exit(main(target))
+    args = [a for a in sys.argv[1:] if not a.startswith("--forbid")]
+    forbid = ()
+    for a in sys.argv[1:]:
+        if a.startswith("--forbid="):
+            forbid = tuple(x.strip() for x in a.split("=", 1)[1].split(",") if x.strip())
+    target = args[0] if args else "templates/Aron-Proposal-Template.docx"
+    sys.exit(main(target, forbid))
