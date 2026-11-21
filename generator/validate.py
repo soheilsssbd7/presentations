@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from zipfile import ZipFile
+from xml.etree import ElementTree
 
 from docx import Document
 from docx.oxml.ns import qn
@@ -30,9 +32,8 @@ FIXED_TITLES = [
 
 # محورها و لایه‌ها اختصاصی هر شرکت‌اند: تیتر و تعدادشان از شکاف واقعی
 # همان شرکت می‌آید و هرگز از قالب شرکت دیگر کپی نمی‌شود.
-AXIS_LABELS = "الفبجدهوزحطیکلمنسعفصقرشتثخ ذضظغ".replace(" ", "")
-AXIS_RE = re.compile(r"^(الف|[" + AXIS_LABELS + r"])\. ")
-LAYER_RE = re.compile(r"^[۱-۹]\. (?!بررسی|راه|مدل)")
+AXIS_RE = re.compile(r"^([\u0621-\u06FF]+(?:[\u200c-\u200d][\u0621-\u06FF]+)?)\. ")
+LAYER_RE = re.compile(r"^[۰-۹]+\. ")
 
 FORBIDDEN = [
     "کمپین", "وایرال", "ترند", "تضمین", "رتبهٔ یک", "رتبه یک",
@@ -112,38 +113,46 @@ def main(path, forbid=()):
     if re.search(r"[،؛.:!؟]\s*[،؛.:!؟]", joined):
         warn("نشانه‌گذاری تکراری")
 
-    # ۶ — ساختار (تعداد و تیتر محورها/لایه‌ها آزاد و اختصاصی‌اند)
-    axis_titles = [t for t in texts if AXIS_RE.match(t)]
-    if len(axis_titles) >= 4:
-        ok(f"تعداد محورها: {len(axis_titles)} (اختصاصی شرکت)")
-    else:
-        fail(f"تعداد محورها کم است: {len(axis_titles)}")
-    if len({t[0] for t in axis_titles}) != len(axis_titles):
-        warn("برچسب تکراری در محورها (الف/ب/ج/…)")
-    layer_titles = [t for t in texts if LAYER_RE.match(t)]
-    if len(layer_titles) >= 4:
-        ok(f"تعداد لایه‌ها: {len(layer_titles)} (اختصاصی شرکت)")
-    else:
-        fail(f"تعداد لایه‌ها کم است: {len(layer_titles)}")
+    # ۶ — شمارش فقط در محدوده بخش مربوط، بدون حداقل یا سقف تحمیلی
+    def section_between(start_title, end_title):
+        start = next((i for i, t in enumerate(texts) if t.startswith(start_title)), None)
+        if start is None:
+            return []
+        end = next((i for i in range(start + 1, len(texts))
+                    if texts[i].startswith(end_title)), len(texts))
+        return texts[start + 1:end]
 
-    # ۷ — طول محورها و لایه‌ها
-    for t in texts:
-        if AXIS_RE.match(t):
-            i = texts.index(t)
-            if i + 1 < len(texts):
-                n = words(texts[i + 1])
-                if not 35 <= n <= 80:
-                    warn(f"طول نامتعارف محور ({n} کلمه): {t[:40]}")
-    for t in texts:
-        if LAYER_RE.match(t):
-            i = texts.index(t)
-            if i + 1 < len(texts):
-                n = words(texts[i + 1])
-                if not 15 <= n <= 40:
-                    warn(f"طول نامتعارف لایه ({n} کلمه): {t[:40]}")
+    axis_texts = section_between("۱. بررسی وضعیت فعلی: دریچه‌های ساخت اعتبار", "۲. راه‌حل چیست؟")
+    layer_texts = section_between("۲. راه‌حل چیست؟", "الگوهای جهانی")
+    axis_titles = [t for t in axis_texts if AXIS_RE.match(t)]
+    layer_titles = [t for t in layer_texts if LAYER_RE.match(t)]
+    ok(f"تعداد محورها: {len(axis_titles)} (بدون حداقل یا سقف تحمیلی)")
+    ok(f"تعداد لایه‌ها: {len(layer_titles)} (بدون حداقل یا سقف تحمیلی)")
+    labels = [AXIS_RE.match(t).group(1) for t in axis_titles]
+    if len(set(labels)) != len(labels):
+        warn("برچسب تکراری در محورها")
+
+    # ۷ — طول، فقط به عنوان توصیه نه شرط پذیرش
+    for section, pattern, low, high, kind in (
+        (axis_texts, AXIS_RE, 35, 80, "محور"),
+        (layer_texts, LAYER_RE, 15, 40, "لایه"),
+    ):
+        for i, t in enumerate(section):
+            if pattern.match(t) and i + 1 < len(section):
+                n = words(section[i + 1])
+                if not low <= n <= high:
+                    warn(f"طول نامتعارف {kind} ({n} کلمه): {t[:40]}")
 
     # ۷ب — علامت ممنوعهٔ ٔ (U+0654) هرگز در متن نمی‌آید
-    if "\u0654" in joined:
+    # متن همه بخش‌های Word، از جمله سرصفحه و پانویس، بررسی شود.
+    with ZipFile(path) as archive:
+        document_parts = [name for name in archive.namelist()
+                          if name.startswith("word/") and name.endswith(".xml")]
+        word_text = "\n".join(
+            "".join(ElementTree.fromstring(archive.read(name)).itertext())
+            for name in document_parts
+        )
+    if "\u0654" in word_text:
         fail("علامت ممنوعهٔ ٔ (U+0654) در متن هست")
     else:
         ok("علامت ممنوعهٔ ٔ در متن نیست")

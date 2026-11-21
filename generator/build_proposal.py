@@ -231,7 +231,7 @@ def add_page_numbers(doc):
     p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(0)
-    r = p.add_run("صفحهٔ ")
+    r = p.add_run("صفحه ")
     _set_run(r, size=9, color=SLATE)
     _field(p, "PAGE")
     r = p.add_run(" از ")
