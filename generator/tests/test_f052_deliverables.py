@@ -36,6 +36,16 @@ class F052ContentChecks(unittest.TestCase):
         self.assertIn('گزارش‌های سالانه', text)
         self.assertIn('بدون تأیید', text)
 
+    def test_historical_context_and_no_outreach(self):
+        proposal = word_text(FOLDER / 'Aron-F052-پارسآریان-پروپوزال.docx')
+        brief = word_text(FOLDER / 'Aron-F052-پارسآریان-تحقیق-مخاطب-و-ارتباط.docx')
+        self.assertIn('۱۳۹۶', proposal)
+        self.assertIn('بحران جاری', proposal)
+        self.assertIn('جوابیه', proposal)
+        self.assertIn('توقف و عدم تماس', brief)
+        self.assertIn('مجوز کتبی', brief)
+        self.assertNotIn('در هشدار عمومی خود', proposal)
+
     def test_internal_audit_covers_all_twelve(self):
         content = (ROOT / 'research/F-052-PR-audit-internal.md').read_text()
         for number in '۱۲۳۴۵۶۷۸۹':
