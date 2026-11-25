@@ -161,6 +161,12 @@ def build(data: dict, out_path: str | Path) -> Path:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out_path)
+    if meta.get("footnote"):
+        try:
+            from .footnotes import add_footnote
+        except ImportError:  # standalone script
+            from footnotes import add_footnote
+        add_footnote(out_path, meta["footnote"]["term"], meta["footnote"]["definition"])
     return out_path
 
 
