@@ -348,7 +348,7 @@ def build(data: dict, out_path: str | Path) -> Path:
     for model in s2["models"]:
         p = add_par(doc, model["body"], after=2, line=None)
         if model.get("lesson"):
-            add_par(doc, "درس این الگو: " + model["lesson"], size=12, color=SLATE,
+            add_par(doc, s2.get("model_lesson_label", "درس این الگو: ") + model["lesson"], size=12, color=SLATE,
                     after=4, line=None)
     for block in s2.get("extra", []):
         add_block(doc, block)
