@@ -37,6 +37,20 @@ class B120Deliverables(unittest.TestCase):
         self.assertIn('شهبازی', text)
         self.assertIn('تصدی فعلی و اختیار خرید تایید نشده', text)
 
+    def test_full_report_revision_and_safety_limits(self):
+        proposal = json.loads((ROOT / 'generator/data/B-120.json').read_text(encoding='utf-8'))
+        brief = json.loads((ROOT / 'generator/data/B-120-brief.json').read_text(encoding='utf-8'))
+        audit = (ROOT / 'research/B-120-PR-audit-internal.md').read_text(encoding='utf-8')
+        ptext = json.dumps(proposal, ensure_ascii=False)
+        btext = json.dumps(brief, ensure_ascii=False)
+        for phrase in ('کارمزد ابتدا کسر', 'نگهداری برنامه‌ریزی‌شده', 'سیام', 'نقش شرکا'):
+            self.assertIn(phrase, ptext)
+        for phrase in ('توقف و عدم تماس', '۳۱ فروردین ۱۳۹۹', 'سمت و اختیار جاری', 'هیچ تماس یا ارسال انجام نشده'):
+            self.assertIn(phrase, btext)
+        for phrase in ('تمام پاراگراف‌ها', '۱۲۴ کارت', 'وارسی جامعی انجام نشده', 'پ۱۰۹ و پ۱۱۱', 'HOLD / NO OUTREACH'):
+            self.assertIn(phrase, audit)
+        self.assertNotIn('خوانش خط‌به‌خط تمام پاراگراف‌ها و تک‌تک ۱۲۴ ردیف احراز نشده است', audit)
+
 
 if __name__ == '__main__':
     unittest.main()
