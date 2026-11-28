@@ -51,7 +51,7 @@ class B120Deliverables(unittest.TestCase):
             self.assertIn(phrase, audit)
         self.assertNotIn('خوانش خط‌به‌خط تمام پاراگراف‌ها و تک‌تک ۱۲۴ ردیف احراز نشده است', audit)
 
-    def test_solutions_have_plain_concrete_deliverables(self):
+    def test_solutions_express_communication_strategy(self):
         proposal = json.loads((ROOT / 'generator/data/B-120.json').read_text(encoding='utf-8'))
         layers = proposal['section2']['layers']
         self.assertEqual(len(layers), 7)
@@ -59,9 +59,9 @@ class B120Deliverables(unittest.TestCase):
             self.assertTrue(layer['title'].strip())
             self.assertTrue(layer['body'].strip())
         joined = ' '.join(layer['title'] + ' ' + layer['body'] for layer in layers)
-        for phrase in ('جدول', 'پرسش‌وپاسخ', 'راهنمای ساده', 'متن‌های آماده', 'حساب‌های رسمی', 'مدرک معتبر', 'رعایت محرمانگی'):
+        for phrase in ('نیاز هر گروه', 'شرایط استفاده', 'سیام و شکایت', 'توقف برنامه‌ریزی‌شده', 'راه‌های رسمی', 'اثر اجتماعی', 'رعایت رضایت و محرمانگی'):
             self.assertIn(phrase, joined)
-        for phrase in ('معماری روایت', 'لحظه‌های نیاز', 'صاحب پاسخ', 'سفر مشتری'):
+        for phrase in ('معماری روایت', 'لحظه‌های نیاز', 'صاحب پاسخ', 'سفر مشتری', 'آماده می‌کنیم', 'تهیه می‌کنیم'):
             self.assertNotIn(phrase, joined)
 
 
