@@ -43,13 +43,26 @@ class B120Deliverables(unittest.TestCase):
         audit = (ROOT / 'research/B-120-PR-audit-internal.md').read_text(encoding='utf-8')
         ptext = json.dumps(proposal, ensure_ascii=False)
         btext = json.dumps(brief, ensure_ascii=False)
-        for phrase in ('کارمزد ابتدا کسر', 'نگهداری برنامه‌ریزی‌شده', 'سیام', 'نقش شرکا'):
+        for phrase in ('کارمزد ابتدا کسر', 'توقف برنامه‌ریزی‌شده', 'سیام', 'نقش بانک و شرکا'):
             self.assertIn(phrase, ptext)
         for phrase in ('توقف و عدم تماس', '۳۱ فروردین ۱۳۹۹', 'سمت و اختیار جاری', 'هیچ تماس یا ارسال انجام نشده'):
             self.assertIn(phrase, btext)
         for phrase in ('تمام پاراگراف‌ها', '۱۲۴ کارت', 'وارسی جامعی انجام نشده', 'پ۱۰۹ و پ۱۱۱', 'HOLD / NO OUTREACH'):
             self.assertIn(phrase, audit)
         self.assertNotIn('خوانش خط‌به‌خط تمام پاراگراف‌ها و تک‌تک ۱۲۴ ردیف احراز نشده است', audit)
+
+    def test_solutions_have_plain_concrete_deliverables(self):
+        proposal = json.loads((ROOT / 'generator/data/B-120.json').read_text(encoding='utf-8'))
+        layers = proposal['section2']['layers']
+        self.assertEqual(len(layers), 7)
+        for layer in layers:
+            self.assertTrue(layer['title'].strip())
+            self.assertTrue(layer['body'].strip())
+        joined = ' '.join(layer['title'] + ' ' + layer['body'] for layer in layers)
+        for phrase in ('جدول', 'پرسش‌وپاسخ', 'راهنمای ساده', 'متن‌های آماده', 'حساب‌های رسمی', 'مدرک معتبر', 'رعایت محرمانگی'):
+            self.assertIn(phrase, joined)
+        for phrase in ('معماری روایت', 'لحظه‌های نیاز', 'صاحب پاسخ', 'سفر مشتری'):
+            self.assertNotIn(phrase, joined)
 
 
 if __name__ == '__main__':
